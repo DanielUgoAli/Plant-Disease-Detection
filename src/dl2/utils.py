@@ -12,6 +12,11 @@ import torch.nn.functional as F
 # Imagenet stats fo0r normalization
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
+
+# Precompute as tensors for faster operations
+MEAN_TENSOR = torch.tensor(MEAN).view(3, 1, 1)
+STD_TENSOR = torch.tensor(STD).view(3, 1, 1)
+
 transform = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
@@ -19,29 +24,39 @@ transform = transforms.Compose([
     transforms.Normalize(mean=MEAN, std=STD)
 ])
 
+# File path cache
+_file_path_cache = {}
+
 
 def get_file_path(name: str) -> str:
     """Fast file search: finds the file path in dl2 directory or parent src directory"""
+    if name in _file_path_cache:
+        return _file_path_cache[name]
+    
     dl2_dir = Path(__file__).parent
     src_dir = dl2_dir.parent
     
     # Try direct match in dl2 first (fastest)
     direct_path = dl2_dir / name
     if direct_path.exists():
-        return str(direct_path)
+        _file_path_cache[name] = str(direct_path)
+        return _file_path_cache[name]
     
     # Try direct match in src
     src_path = src_dir / name
     if src_path.exists():
-        return str(src_path)
+        _file_path_cache[name] = str(src_path)
+        return _file_path_cache[name]
     
     # Search recursively in dl2
     for path in dl2_dir.rglob(name):
-        return str(path)
+        _file_path_cache[name] = str(path)
+        return _file_path_cache[name]
     
     # Search recursively in src
     for path in src_dir.rglob(name):
-        return str(path)
+        _file_path_cache[name] = str(path)
+        return _file_path_cache[name]
     
     raise FileNotFoundError(f"File '{name}' not found in {dl2_dir} or {src_dir}")
 
@@ -54,12 +69,17 @@ def get_file_names(directory):
     return file_names
 
 
-def inference(img, model: torch.nn.Module):
+def inference(img, model: torch.nn.Module, use_fp16: bool = False):
     model.eval()
+    device = next(model.parameters()).device
 
     with torch.inference_mode():
         transformed_img = transform(img)
-        transformed_img = transformed_img.unsqueeze(0).to(next(model.parameters()).device)  # batch dimension [1, C, H, W]
+        transformed_img = transformed_img.unsqueeze(0).to(device)  # batch dimension [1, C, H, W]
+        
+        if use_fp16 and device.type == 'cuda':
+            transformed_img = transformed_img.half()
+        
         output = model(transformed_img)
         return torch.argmax(output, dim=1).item()
 
@@ -126,11 +146,16 @@ class GradCAM:
         cam = (cam - cam_min) / (cam_max - cam_min + 1e-8)
 
         return cam.squeeze().detach().cpu().numpy()
-
-    def __del__(self):
+    
+    def remove_hooks(self):
         # Remove hooks to prevent memory leaks
         for hook in self.hooks:
             hook.remove()
+        self.hooks.clear()
+
+    def __del__(self):
+        # Remove hooks to prevent memory leaks
+        self.remove_hooks()
 
 
 def inferencev2(img, model: torch.nn.Module, target_layer=None):
@@ -173,6 +198,7 @@ def inferencev2(img, model: torch.nn.Module, target_layer=None):
     # Generate Grad-CAM
     gradcam = GradCAM(model, target_layer)
     heatmap = gradcam(input_batch, target_class=torch.tensor([predicted_class]).to(device))
+    gradcam.remove_hooks()
     
     # Denormalize the image for display
     img_for_display = transformed_img.cpu().numpy().transpose((1, 2, 0))
