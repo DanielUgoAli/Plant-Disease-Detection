@@ -6,7 +6,6 @@ from PIL import Image
 from torchvision import transforms
 
 # PLANT DATASET
-
 class PlantDataset(Dataset):
     """Dataset class that reads images from a folder and applies transformations."""
     def __init__(self, root_dir, transform=None):
@@ -37,7 +36,6 @@ class PlantDataset(Dataset):
 
 
 # DATA PIPELINE CLASS 
-
 class DataPipeline:
     """Handles all preprocessing, transformations, and DataLoaders."""
     def __init__(self, data_dir, batch_size=32, img_size=224):
@@ -95,10 +93,8 @@ class DataPipeline:
         """Return list of class names in the dataset."""
         train_ds = PlantDataset(os.path.join(self.data_dir, "train"))
         return train_ds.classes
-
-
+        
 # TESTING
-
 if __name__ == "__main__":
     pipeline = DataPipeline(data_dir="data/processed", batch_size=32, img_size=224)
     train_loader, val_loader, test_loader = pipeline.get_dataloaders()
