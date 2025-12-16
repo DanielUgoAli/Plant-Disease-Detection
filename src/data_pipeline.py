@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from torchvision import transforms
 
-# PLANT DATASET
+
 class PlantDataset(Dataset):
     """Dataset class that reads images from a folder and applies transformations."""
     def __init__(self, root_dir, transform=None):
