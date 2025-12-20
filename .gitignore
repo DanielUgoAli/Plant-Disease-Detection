@@ -11,3 +11,9 @@ env/
 .vscode/
 
 .ipynb_checkpoints/
+
+# data (large files)
+data/*/
+
+# model state
+*.pth
