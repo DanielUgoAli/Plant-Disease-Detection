@@ -207,9 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # data (large files)
-data/train/
-data/valid/
-data/test/
+data/*/
 
 # model state
 *.pth
